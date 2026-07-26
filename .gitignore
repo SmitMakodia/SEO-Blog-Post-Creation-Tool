@@ -1,32 +1,108 @@
-# Environments
-venv/
-env/
-.env
+# =============================================================================
+#  What this repository publishes
+# =============================================================================
+#  Only the files needed to read, understand and run the pipeline:
+#
+#    .gitignore  .env.example  README.md  requirements.txt  main.py
+#    src/__init__.py  src/config.py  src/utils.py  src/scraper.py
+#    src/product_analyzer.py  src/keyword_research.py
+#    src/blog_generator.py  src/publisher.py
+#
+#  Everything else is deliberately excluded below.
+# =============================================================================
 
-# Python
+# --- Secrets: never commit -----------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets.*
+
+# --- Virtual environments -------------------------------------------------
+venv/
+.venv/
+ENV/
+env/
+.python-version
+
+# --- Python build / cache -------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Data & Logs
+# --- Runtime output: regenerated on every run, not source -----------------
 data/
 logs/
 *.log
+output/
+*.csv
+*.xlsx
 
-# IDEs
-.vscode/
-.idea/
+# --- Test / tooling caches ------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.ipynb_checkpoints/
 
-# OS
-.DS_Store
-Thumbs.db
+# --- Unused / superseded modules ------------------------------------------
+# Parallel iterations and dead code that main.py does not import.
+# main_pro.py additionally fails on import (it references a class that does
+# not exist in src/publisher.py), so it is not shippable.
+main_pro.py
+src/main_pro.py
+src/batch_blog_generator.py
+src/keyword_research2.py
+src/keyword_research_pro.py
+src/blog_generator_pro.py
 
-# Selenium
-chromedriver.exe
-geckodriver.exe
+# --- Unused assets --------------------------------------------------------
+# Placeholder template not referenced by any module.
+templates/
+
+# --- Private working documents --------------------------------------------
+# Assignment reports, research notes, AI working files and the proof-of-work
+# evidence package. Personal working material, not project documentation.
+rework-proof/
+REPORT.md
+ReportTask2.md
+PROJECT_OVERVIEW.md
 better.md
 prompt.md
-main_pro.py
-src/blog_generator_pro.py
-src/keyword_research_pro.py
-src/keyword_research2.py
+*_INSTRUCTION_PACK.md
+notes.md
+scratch/
+tmp/
+
+# --- Editor / OS ----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

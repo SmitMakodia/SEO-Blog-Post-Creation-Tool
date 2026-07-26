@@ -1,14 +1,20 @@
+# Scraping
 beautifulsoup4==4.12.3
+lxml==5.1.0
 requests==2.31.0
 selenium==4.16.0
 webdriver-manager==4.0.1
-lxml==5.1.0
-google-generativeai==0.3.2
-python-dotenv==1.0.0
+
+# Keyword research
+# pytrends is imported by src/keyword_research.py (a TrendReq client is
+# constructed) but is not called on the pipeline path - keyword volume falls
+# back to an intent-derived constant. Kept because the import is required.
 pytrends==4.9.2
-advertools==0.16.0
-requests-oauthlib==1.3.1
-pandas==2.1.4
-openpyxl==3.1.2
-schedule==1.2.0
-tqdm==4.66.1
+
+# AI content generation
+# If you hit "404 models/... is not found", upgrade this package - newer
+# Gemini model ids require a newer SDK than this pin.
+google-generativeai==0.3.2
+
+# Configuration
+python-dotenv==1.0.0

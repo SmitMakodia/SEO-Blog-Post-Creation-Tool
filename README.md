@@ -1,175 +1,273 @@
 # Zero-Cost AI SEO Blog Post Creation Tool
 
-An automated pipeline that scrapes trending e-commerce products, researches SEO keywords, generates optimized blog content using AI, and publishes to **Hashnode** - all using **100% free tools and services**.
+An automated pipeline that scrapes trending e-commerce products, researches SEO keywords, generates
+optimized blog content with AI, and publishes to **Hashnode** — using **100% free-tier services**.
+
+**Verified result: 17 blog posts published to a live Hashnode publication on 2026-01-24.**
+
+```bash
+# Verify the published output yourself - no credentials needed
+curl -s https://smitmakodia.hashnode.dev/sitemap.xml | grep -o "<loc>[^<]*</loc>"
+```
+
+---
 
 ## Workflow Architecture
 
 ```mermaid
-graph TD
-    %% Global Styles
-    classDef process fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
-    classDef decision fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
-    classDef storage fill:#e0f2f1,stroke:#00695c,stroke-width:2px;
-    classDef api fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
-    classDef output fill:#e8eaf6,stroke:#283593,stroke-width:2px;
+flowchart TD
+    A[Start: python main.py] --> B{GEMINI_API_KEY set?}
+    B -- No --> X1[Log error and exit]
+    B -- Yes --> C[Select category 1-4]
 
-    Start([🚀 Start Application]) --> Init[Initialize Modules & Logger]
-    Init --> Config{Check Env Config}
-    Config -- Missing Keys --> Error[Log Error & Exit]
-    Config -- Valid --> Step1
+    C --> D[GET Amazon Best Sellers page]
+    D --> E{HTTP 200?}
+    E -- "No: 429 or error" --> F[Headless Selenium fallback]
+    E -- Yes --> G[Parse HTML with BeautifulSoup]
+    F --> G
+    G --> H{Products found?}
+    H -- No --> X2[Log error and exit]
+    H -- Yes --> I[(data/products.json)]
 
-    subgraph Step1 [Phase 1: Product Scraping]
-        direction TB
-        S1_Start(Start Scraper) --> AmazonReq[Request Amazon Best Sellers URL]
-        AmazonReq --> BlockCheck{Request Blocked? <br/>HTTP 429/503}
-        
-        BlockCheck -- No --> BS4[Parse HTML with BeautifulSoup]
-        BlockCheck -- Yes --> Selenium[Launch Headless Selenium WebDriver]
-        Selenium --> SelNav[Navigate to Page & Scroll]
-        SelNav --> BS4
-        
-        BS4 --> Extract[Extract Product Data]
-        Extract --> ParseDetails[Parse: Title, Price, Rating, URL]
-        ParseDetails --> ValidProd{Valid Product?}
-        ValidProd -- Yes --> AddProd[Add to Product List]
-        ValidProd -- No --> SkipProd[Skip Item]
-        
-        AddProd --> SaveProd[💾 Save to data/products.json]
-    end
+    I --> J[Parse brand, type, features from title]
+    J --> K[Google Autocomplete plus Amazon Autocomplete]
+    K --> L[Score relevance, drop below 0.35]
+    L --> M[Classify intent, select top 4 diversified]
+    M --> N[(data/keywords.json)]
 
-    SaveProd --> CheckProds{Products Found?}
-    CheckProds -- No --> Exit1[Log Error & Exit]
-    CheckProds -- Yes --> Step2
+    N --> O[Build prompt, call Gemini 2.5 Flash Lite]
+    O --> P{Response valid?}
+    P -- "429 quota" --> Q[Sleep 35s, retry up to 3x]
+    Q --> O
+    P -- "Bad JSON" --> X3[Skip this product]
+    P -- Yes --> R{Word count 150-200?}
+    R -- Too long --> S[Truncate to 200 words]
+    R -- Too short --> T[Log warning, keep post]
+    R -- In range --> U[Build blog record]
+    S --> U
+    T --> U
+    U --> V[(data/blogs.json)]
 
-    subgraph Step2 [Phase 2: SEO Keyword Research]
-        direction TB
-        S2_Start(Start Researcher) --> LoopProd1[Loop: For Each Product]
-        LoopProd1 --> Seeds[Generate Seed Keywords <br/>from Title]
-        Seeds --> AutoComp[Google Autocomplete API <br/>Expand Keywords]
-        
-        AutoComp --> Trends[Google Trends API <br/>Fetch Interest Scores]
-        Trends --> Analyze[Analyze Search Intent <br/>Commercial/Informational]
-        Analyze --> Rank[Rank & Select Top 4 Keywords]
-        
-        Rank --> MapKey[Map Keywords to Product]
-        MapKey --> SaveKey[💾 Save to data/keywords.json]
-    end
-
-    SaveKey --> Step3
-
-    subgraph Step3 [Phase 3: AI Content Generation]
-        direction TB
-        S3_Start(Start Generator) --> LoopProd2[Loop: For Each Product]
-        LoopProd2 --> Prompt[Construct AI Prompt <br/>Role: Expert SEO Writer]
-        Prompt --> GeminiAPI[Call Gemini 2.5 Flash Lite API]
-        
-        GeminiAPI --> QuotaCheck{Quota Exceeded? <br/>HTTP 429}
-        QuotaCheck -- Yes --> Retry[Wait 35s & Retry <br/>Max 3 Attempts]
-        Retry --> GeminiAPI
-        
-        QuotaCheck -- No --> ParseResp[Parse JSON Response]
-        ParseResp --> Validate{Validate Content}
-        
-        Validate -- Too Short --> Regnerate[Regenerate Content]
-        Validate -- Too Long --> Truncate[Truncate Content]
-        Validate -- Valid --> FinalizeBlog[Finalize Blog Object]
-        
-        FinalizeBlog --> SaveBlog[💾 Save to data/blogs.json]
-    end
-
-    SaveBlog --> CheckBlogs{Blogs Generated?}
-    CheckBlogs -- No --> Exit2[Log Error & Exit]
-    CheckBlogs -- Yes --> Step4
-
-    subgraph Step4 [Phase 4: Content Publishing]
-        direction TB
-        S4_Start(Start Publisher) --> LoopBlog[Loop: For Each Blog]
-        LoopBlog --> Format[Format Content to Markdown <br/>Add Product CTA Link]
-        Format --> HashnodeAPI[Call Hashnode GraphQL API]
-        
-        HashnodeAPI --> Publish[Mutation: publishPost]
-        Publish --> PubResult{Success?}
-        
-        PubResult -- No --> LogErr[Log API Error]
-        PubResult -- Yes --> GetURL[Extract Live URL]
-        GetURL --> LogPub[Add to Published List]
-        
-        LogPub --> SavePub[💾 Save to data/published.json]
-    end
-
-    SavePub --> Cleanup[Cleanup Resources <br/>Close WebDriver]
-    Cleanup --> End([✅ Pipeline Complete])
-
-    %% Apply Styles
-    class Start,Init,S1_Start,S2_Start,S3_Start,S4_Start,Extract,ParseDetails,Seeds,Prompt,ParseResp,Format,Publish,Cleanup process;
-    class Config,BlockCheck,ValidProd,CheckProds,QuotaCheck,Validate,CheckBlogs,PubResult decision;
-    class SaveProd,SaveKey,SaveBlog,SavePub,MapKey,LogPub storage;
-    class AmazonReq,Selenium,AutoComp,Trends,GeminiAPI,HashnodeAPI api;
-    class End,Error,Exit1,Exit2 output;
+    V --> W{Publishing enabled?}
+    W -- No --> X4[Stop: local artifacts only]
+    W -- Yes --> Y[Append product CTA, map tags]
+    Y --> Z[POST Hashnode GraphQL publishPost]
+    Z --> AA{Success?}
+    AA -- No --> AB[Skip post, no retry]
+    AA -- Yes --> AC[Record live URL]
+    AB --> AD[(data/published.json)]
+    AC --> AD
 ```
 
-## Quick Start Guide
+<details>
+<summary><b>Text version of the workflow</b> (click to expand — use this if the diagram above does not render)</summary>
+
+```text
+TRIGGER   python main.py  ->  interactive category prompt (1-4)
+          Guard: exit 1 if GEMINI_API_KEY is unset
+
+STAGE 1   PRODUCT DISCOVERY                                    src/scraper.py
+          Sleep 2-5s (randomised) -> GET Amazon Best Sellers URL
+            HTTP 200          -> parse with BeautifulSoup + lxml
+            non-200 / error   -> headless Chrome via Selenium, load + scroll, parse
+          Per product: title, price, rating, URL, ASIN, rank, timestamp
+          Guard: zero products -> log error, exit 1
+          OUT: data/products.json
+
+STAGE 2   KEYWORD RESEARCH          src/product_analyzer.py + src/keyword_research.py
+          Title -> brand, product type, features (regex + fixed lists)
+          -> seed phrases ("[brand] [type] review", "best [type]", problem templates)
+          -> Google Autocomplete (up to 6 per seed) + Amazon Autocomplete (up to 8)
+          -> relevance score: brand .25 | type .35 | feature .15 | overlap .15 | similarity .10
+          -> drop anything below 0.35
+          -> classify intent: transactional / commercial / informational / navigational / mixed
+          -> round-robin one per intent bucket until 4 selected
+          Guard: nothing selected -> use truncated product title
+          OUT: data/keywords.json
+
+STAGE 3   CONTENT GENERATION                            src/blog_generator.py
+          Prompt: product facts + 1 primary + 3 secondary keywords
+                + structure spec + 150-200 word target + JSON-only instruction
+          Call gemini-2.5-flash-lite
+            429             -> sleep 35s, retry (max 3 attempts)
+            JSONDecodeError -> abandon this product, continue with the rest
+            OK              -> strip code fences -> json.loads
+          Length: too long -> truncate to 200 words
+                  too short -> log warning, keep the post anyway
+          OUT: data/blogs.json
+
+STAGE 4   PUBLISHING                                       src/publisher.py
+          Only if PUBLISH_TO_HASHNODE and both Hashnode credentials are present
+          Append "Check out this product: [title](url)" CTA to the Markdown body
+          Map up to 5 keywords to tags
+          POST https://gql.hashnode.com  mutation publishPost(input: ...)
+            failure -> return None, skip post (no retry, no log entry)
+            success -> record post id, live URL, title, timestamp
+          Sleep 2s between posts
+          OUT: data/published.json  + live URLs printed to stdout
+
+OBSERVABILITY  logs/execution_<date>.log + stdout, INFO level (src/utils.py)
+```
+
+</details>
+
+---
+
+## Quick Start
 
 ### 1. Installation
 
 ```bash
-# Clone repository (if applicable)
-# git clone https://github.com/yourusername/seo-blog-tool.git
-# cd seo-blog-tool
-
-# Create virtual environment
 python -m venv venv
 
-# Activate virtual environment
-# Windows:
+# Windows
 venv\Scripts\activate
-# Linux/Mac:
-# source venv/bin/activate
+# Linux/Mac
+source venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
 ### 2. Configuration
 
-Copy `.env.example` to `.env`:
-
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and add your keys:
-- `GEMINI_API_KEY`: Get from https://aistudio.google.com/app/apikey (Free)
-- `HASHNODE_ACCESS_TOKEN`: Get from https://hashnode.com/settings/developer
-- `HASHNODE_PUBLICATION_ID`: Get from your Blog Dashboard URL or Settings.
+Then edit `.env` and add your keys:
+
+| Variable | Where to get it |
+|---|---|
+| `GEMINI_API_KEY` | https://aistudio.google.com/app/apikey (free) |
+| `HASHNODE_ACCESS_TOKEN` | https://hashnode.com/settings/developer |
+| `HASHNODE_PUBLICATION_ID` | Your blog dashboard URL or publication settings (UUID) |
+
+> ⚠️ **Hashnode API access now requires a Pro plan.** Hashnode retired free GraphQL API access on
+> **2026-05-13**, so the publishing stage will fail on a free account. To run stages 1–3 only, set
+> `PUBLISH_TO_HASHNODE = False` in `src/config.py`. The 17 posts linked below were published while free
+> access was still available.
 
 ### 3. Usage
-
-Run the main pipeline:
 
 ```bash
 python main.py
 ```
 
 The tool will:
-1.  Scrape trending products from Amazon.
-2.  Perform keyword research using Google Trends and Autocomplete.
-3.  Generate SEO-optimized blog posts using Google Gemini AI.
-4.  Publish to Hashnode.
-5.  Save all data to `data/` directory.
+1. Scrape a trending product from an Amazon Best Sellers category.
+2. Research keywords via Google Autocomplete and Amazon Autocomplete.
+3. Generate a 150–200 word SEO post with Google Gemini.
+4. Publish to Hashnode (if enabled and you have API access).
+5. Write all artifacts to `data/`.
 
 ### 4. Output
 
-Check the `data/` directory for:
--   `products.json`: Scraped product data.
--   `keywords.json`: Keyword research data.
--   `blogs.json`: Generated blog posts.
--   `published.json`: Log of published posts.
+| File | Contents |
+|---|---|
+| `data/products.json` | Scraped product data |
+| `data/keywords.json` | Selected keywords with composite scores and intent labels |
+| `data/blogs.json` | Generated posts with word counts |
+| `data/published.json` | Live URLs and Hashnode post IDs |
+| `logs/execution_<date>.log` | Timestamped run log |
 
-## Getting Hashnode Credentials
+---
 
-1.  **Access Token:** Go to [Hashnode Developer Settings](https://hashnode.com/settings/developer). Create a new Personal Access Token.
-2.  **Publication ID:** 
-    - Go to your blog's dashboard.
-    - Copy the ID from the URL or find it in the settings page.
-    - It usually looks like a long alphanumeric string (UUID).
+## How keywords are chosen
+
+Keyword selection is fully deterministic and auditable — every score in `data/keywords.json` can be
+recomputed by hand from the source:
+
+1. **Extract** brand, product type and features from the product title (`src/product_analyzer.py`).
+2. **Expand** seed phrases via Google Autocomplete and Amazon Autocomplete.
+3. **Score relevance** on five weighted signals: brand match (0.25), product-type match (0.35),
+   feature match (0.15), title word overlap (0.15), and sequence similarity (0.10).
+4. **Filter** out anything scoring below 0.35.
+5. **Classify intent** into transactional, commercial, informational, navigational or mixed.
+6. **Diversify** — take the highest scorer from each intent bucket in turn until 4 are selected.
+
+> **Note on Google Trends.** A `pytrends` client is constructed in `src/keyword_research.py` but is
+> **never called**. It proved too slow and rate-limited when queried per keyword batch, so keyword
+> volume falls back to a constant derived from intent class — see the comment at
+> `src/keyword_research.py:101`. Keyword ranking is therefore **relevance-and-intent based, not
+> search-volume based.** Restoring a real Trends signal (ideally cached, to survive its rate limits) is
+> on the roadmap below.
+
+---
+
+## Verified evidence
+
+Everything below is checkable from public endpoints — no credentials, no cloned repo:
+
+| Evidence | How to check |
+|---|---|
+| **17 live posts**, all published 2026-01-24 | `curl -s https://smitmakodia.hashnode.dev/sitemap.xml \| grep -o "<loc>[^<]*</loc>"` |
+| Exact publication timestamps, clustered into **8 batches** | `curl -s https://smitmakodia.hashnode.dev/rss.xml \| grep -o "<pubDate>[^<]*</pubDate>"` |
+| Keywords became post tags, and the CTA links to the scraped product | Open any post — tags are the researched keywords, slugified |
+
+Run the pipeline yourself and the local artifacts appear in `data/` and `logs/` (both gitignored, since
+they are regenerated output rather than source). In the recorded 2026-01-24 session those artifacts
+reconciled to the live feed across all 8 batches at second-level precision, including one batch that
+published 2 of 3 after a generation failure.
+
+Sample posts:
+- [Snow Joe Ice Melt Reviews](https://smitmakodia.hashnode.dev/snow-joe-ice-melt-reviews-discover-the-premium-blend-for-a-safer-winter) — the post recorded in `data/published.json`
+- [Owala Water Bottle 24 oz Review](https://smitmakodia.hashnode.dev/owala-water-bottle-24-oz-review-hydration-hero)
+- [DREO Space Heater 1500W Review](https://smitmakodia.hashnode.dev/dreo-space-heater-1500w-review-cozy-up-fast)
+
+---
+
+## Project structure
+
+```
+main.py                        Orchestrator - the entry point
+requirements.txt               8 pinned dependencies
+.env.example                   Template for the 3 required credentials
+src/scraper.py                 Stage 1: Amazon scrape, requests -> Selenium fallback
+src/product_analyzer.py        Deterministic title -> attributes + seed phrases
+src/keyword_research.py        Stage 2: expansion, scoring, intent, selection
+src/blog_generator.py          Stage 3: Gemini generation + validation
+src/publisher.py               Stage 4: Hashnode GraphQL publishing
+src/config.py                  Env loading, paths, thresholds, feature flags
+src/utils.py                   Dated file + console logger
+```
+
+That is the whole project — every file here is imported and used. Runtime output (`data/`, `logs/`) and
+local working material are gitignored rather than published.
+
+---
+
+## Known limitations
+
+- **Publishing requires a Hashnode Pro plan** as of 2026-05-13 (see above).
+- **No review gate.** With publishing enabled, generated content goes live unread, and nothing verifies
+  the model's factual claims about the product. `PUBLISH_STATUS = "draft"` exists in `src/config.py`
+  but no code reads it.
+- **No idempotency.** Re-running a category republishes the same product — the 17 posts include
+  duplicates.
+- **The short-content check does not block.** It logs a warning and keeps the post; the measured sample
+  is 149 words against the configured 150-word floor.
+- **Scraping depends on Amazon's obfuscated CSS class names**, which change without notice. This is the
+  most likely thing to break.
+- **No automated tests, no CI, no deployment configuration.** This is a local CLI tool.
+- **No analytics**, so the tool cannot report what any published post achieved.
+- Prices are captured as displayed and are not currency-normalised (`amazon.com` may geo-redirect).
+
+---
+
+## Roadmap
+
+Ordered by value, not effort. None of this is implemented yet.
+
+1. **Add a review gate.** Make `PUBLISH_STATUS` functional and default it to draft, so nothing goes live
+   unread. This is the most important fix — see the first limitation above.
+2. **Restore a working publish target** — either a Hashnode Pro plan, or a Dev.to / local-Markdown
+   publisher behind the existing publisher interface.
+3. **Idempotency:** key on ASIN and skip products already published.
+4. Make the short-content branch actually regenerate, and add required-field validation on the model
+   response.
+5. Add logging and retry-with-backoff to the publisher, so failed publishes leave a record.
+6. Tests for the deterministic units — relevance scoring, intent classification, word-count enforcement
+   and Markdown assembly are all pure functions and cheap to cover.
+7. Replace the interactive `input()` with a CLI argument, which would allow scheduled unattended runs.
+8. Cache a real Google Trends signal so keyword ranking can use measured demand instead of an
+   intent-derived constant.
